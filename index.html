@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voice Lobby</title>
+<style>
+body { font-family: Arial; text-align:center; margin:50px; background:#f0f0f0; }
+input, button { font-size:16px; padding:8px; margin:5px; }
+#participants { margin-top:20px; }
+.participant { display:inline-block; width:100px; height:50px; background:gray; margin:5px; line-height:50px; color:white; }
+</style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+<h1>Voice Lobby</h1>
+
+<div id="loginDiv">
+  <input id="username" placeholder="Your name">
+  <button id="saveName">Save Name</button>
+</div>
+
+<div id="lobbyDiv" style="display:none;">
+  <input id="inviteName" placeholder="Invite someone by name">
+  <button id="inviteBtn">Invite</button>
+  <div id="notification"></div>
+  <div id="participants"></div>
+</div>
+
+<script>
+// --- Firebase setup ---
+const firebaseConfig = {
+  databaseURL: "https://andcall-default-rtdb.firebaseio.com/"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// --- Elements ---
+const loginDiv = document.getElementById("loginDiv");
+const lobbyDiv = document.getElementById("lobbyDiv");
+const usernameInput = document.getElementById("username");
+const saveNameBtn = document.getElementById("saveName");
+const inviteInput = document.getElementById("inviteName");
+const inviteBtn = document.getElementById("inviteBtn");
+const notificationDiv = document.getElementById("notification");
+const participantsDiv = document.getElementById("participants");
+
+let myName = "";
+
+// --- Save user name with uniqueness check ---
+saveNameBtn.onclick = () => {
+  const name = usernameInput.value.trim();
+  if(!name) return alert("Enter a name!");
+
+  db.ref("users/" + name).get().then(snap => {
+    if(snap.exists()){
+      alert("This username is already taken. Choose another!");
+    } else {
+      myName = name;
+      db.ref("users/" + myName).set({online:true});
+      loginDiv.style.display = "none";
+      lobbyDiv.style.display = "block";
+      listenForInvites();
+      updateParticipants();
+    }
+  });
+};
+
+// --- Invite someone ---
+inviteBtn.onclick = () => {
+  const target = inviteInput.value.trim();
+  if(!target) return alert("Type a name to invite!");
+  db.ref("invites/" + target).set({from: myName, status:"pending"});
+  alert("Invite sent to " + target);
+};
+
+// --- Listen for invites ---
+function listenForInvites(){
+  const inviteRef = db.ref("invites/" + myName);
+  inviteRef.on("value", snap => {
+    const val = snap.val();
+    if(val && val.status === "pending"){
+      if(confirm(val.from + " wants to join call. Accept?")){
+        inviteRef.update({status:"accepted"});
+        addParticipant(val.from);
+        addParticipant(myName);
+      }
+    }
+  });
+}
+
+// --- Show participants ---
+function updateParticipants(){
+  const usersRef = db.ref("users");
+  usersRef.on("value", snap => {
+    participantsDiv.innerHTML = "";
+    snap.forEach(child => {
+      if(child.val().online) addParticipant(child.key);
+    });
+  });
+}
+
+function addParticipant(name){
+  if([...participantsDiv.children].some(c=>c.textContent===name)) return;
+  const box = document.createElement("div");
+  box.className = "participant";
+  box.textContent = name;
+  participantsDiv.appendChild(box);
+}
+
+</script>
+</body>
+</html>
