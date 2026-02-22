@@ -2,105 +2,106 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Voice Lobby - Google Auth</title>
+<title>Voice Lobby - Sign Up/Login</title>
 <style>
 body { font-family: Arial; text-align:center; margin:50px; background:#f0f0f0; }
 button { font-size:16px; padding:12px 20px; margin:10px; cursor:pointer; }
 #participants { margin-top:20px; }
 .participant { display:inline-block; width:120px; height:50px; background:gray; margin:5px; line-height:50px; color:white; }
 </style>
-<!-- Firebase SDKs -->
 <script type="module">
-  // Firebase imports
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-  // Firebase config
-  const firebaseConfig = {
-    apiKey: "AIzaSyCH1xZh5Jgi-l14VDzdlDD5AlOVrGHiF-o",
-    authDomain: "andcall.firebaseapp.com",
-    databaseURL: "https://andcall-default-rtdb.firebaseio.com",
-    projectId: "andcall",
-    storageBucket: "andcall.firebasestorage.app",
-    messagingSenderId: "914219443243",
-    appId: "1:914219443243:web:2e490761aaf278f643b66e",
-    measurementId: "G-RV1DHXCGNR"
-  };
+// --- Firebase config ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCH1xZh5Jgi-l14VDzdlDD5AlOVrGHiF-o",
+  authDomain: "andcall.firebaseapp.com",
+  databaseURL: "https://andcall-default-rtdb.firebaseio.com",
+  projectId: "andcall",
+  storageBucket: "andcall.firebasestorage.app",
+  messagingSenderId: "914219443243",
+  appId: "1:914219443243:web:2e490761aaf278f643b66e",
+  measurementId: "G-RV1DHXCGNR"
+};
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-  const auth = getAuth(app);
-  const provider = new GoogleAuthProvider();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
 
-  // DOM elements
-  const loginBtn = document.createElement("button");
-  loginBtn.textContent = "Login";
-  const signinBtn = document.createElement("button");
-  signinBtn.textContent = "Sign In";
+// --- DOM elements ---
+const signupBtn = document.createElement("button");
+signupBtn.textContent = "Sign Up";
+const loginBtn = document.createElement("button");
+loginBtn.textContent = "Login";
+document.body.appendChild(signupBtn);
+document.body.appendChild(loginBtn);
 
-  document.body.appendChild(loginBtn);
-  document.body.appendChild(signinBtn);
+const participantsDiv = document.createElement("div");
+participantsDiv.id = "participants";
+document.body.appendChild(participantsDiv);
 
-  const participantsDiv = document.createElement("div");
-  participantsDiv.id = "participants";
-  document.body.appendChild(participantsDiv);
+let myName = "";
 
-  let myName = "";
+// --- Sign Up ---
+signupBtn.onclick = async () => {
+  const result = await signInWithPopup(auth, provider);
+  myName = result.user.displayName.replace(/\s+/g, "_");
+  const userRef = ref(db, "users/" + myName);
+  const snap = await get(userRef);
+  if(snap.exists()){
+    alert("This username already exists. Please Login instead.");
+    signOut(auth);
+    myName = "";
+  } else {
+    set(userRef, {online:true});
+    alert("Signed up as " + myName);
+    listenParticipants();
+  }
+};
 
-  // --- Auth functions ---
-  loginBtn.onclick = () => {
-    signInWithPopup(auth, provider).then(result => {
-      myName = result.user.displayName.replace(/\s+/g, "_");
-      registerUser();
-    }).catch(console.error);
-  };
+// --- Login ---
+loginBtn.onclick = async () => {
+  const result = await signInWithPopup(auth, provider);
+  myName = result.user.displayName.replace(/\s+/g, "_");
+  const userRef = ref(db, "users/" + myName);
+  const snap = await get(userRef);
+  if(snap.exists()){
+    update(ref(db, "users/" + myName), {online:true});
+    alert("Logged in as " + myName);
+    listenParticipants();
+  } else {
+    alert("No account found. Please Sign Up first.");
+    signOut(auth);
+    myName = "";
+  }
+};
 
-  signinBtn.onclick = () => {
-    signInWithPopup(auth, provider).then(result => {
-      myName = result.user.displayName.replace(/\s+/g, "_");
-      registerUser();
-    }).catch(console.error);
-  };
-
-  function registerUser() {
-    const userRef = ref(db, "users/" + myName);
-    get(userRef).then(snap => {
-      if(snap.exists()){
-        alert("Welcome back, " + myName);
-      } else {
-        set(userRef, {online:true});
-        alert("Registered as " + myName);
+// --- Show participants ---
+function listenParticipants(){
+  const usersRef = ref(db, "users");
+  onValue(usersRef, snap => {
+    participantsDiv.innerHTML = "";
+    snap.forEach(child => {
+      if(child.val().online){
+        const box = document.createElement("div");
+        box.className = "participant";
+        box.textContent = child.key;
+        participantsDiv.appendChild(box);
       }
-      listenParticipants();
     });
-  }
-
-  // --- Show participants ---
-  function listenParticipants(){
-    const usersRef = ref(db, "users");
-    onValue(usersRef, snap => {
-      participantsDiv.innerHTML = "";
-      snap.forEach(child => {
-        if(child.val().online){
-          const box = document.createElement("div");
-          box.className = "participant";
-          box.textContent = child.key;
-          participantsDiv.appendChild(box);
-        }
-      });
-    });
-  }
-
-  // Track auth state
-  onAuthStateChanged(auth, user => {
-    if(user){
-      myName = user.displayName.replace(/\s+/g, "_");
-      registerUser();
-    }
   });
+}
 
+// --- Track auth state ---
+onAuthStateChanged(auth, user => {
+  if(user && !myName){
+    myName = user.displayName.replace(/\s+/g, "_");
+    listenParticipants();
+  }
+});
 </script>
 </body>
 </html>
